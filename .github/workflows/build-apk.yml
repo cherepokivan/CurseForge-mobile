@@ -41,6 +41,16 @@ jobs:
       - name: Grant execute permission
         run: chmod +x gradlew
 
+      - name: Prepare release keystore (optional)
+        if: ${{ secrets.ANDROID_KEYSTORE != '' }}
+        shell: bash
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > "$GITHUB_WORKSPACE/ci-release.keystore"
+          echo "RELEASE_STORE_FILE=$GITHUB_WORKSPACE/ci-release.keystore" >> "$GITHUB_ENV"
+          echo "RELEASE_STORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> "$GITHUB_ENV"
+          echo "RELEASE_KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> "$GITHUB_ENV"
+          echo "RELEASE_KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> "$GITHUB_ENV"
+
       - name: Run unit tests
         run: ./gradlew -PbaseUrl="https://express-js-on-vercel-for-curseforge.vercel.app/" test
 

@@ -8,6 +8,16 @@ plugins {
 
 def baseUrlProperty = project.findProperty('baseUrl') ?: 'https://express-js-on-vercel-for-curseforge.vercel.app/'
 
+def releaseStoreFileProp = (project.findProperty('releaseStoreFile') ?: System.getenv('RELEASE_STORE_FILE')) as String
+
+def releaseStorePasswordProp = (project.findProperty('releaseStorePassword') ?: System.getenv('RELEASE_STORE_PASSWORD')) as String
+
+def releaseKeyAliasProp = (project.findProperty('releaseKeyAlias') ?: System.getenv('RELEASE_KEY_ALIAS')) as String
+
+def releaseKeyPasswordProp = (project.findProperty('releaseKeyPassword') ?: System.getenv('RELEASE_KEY_PASSWORD')) as String
+
+def hasReleaseSigning = releaseStoreFileProp && releaseStorePasswordProp && releaseKeyAliasProp && releaseKeyPasswordProp && file(releaseStoreFileProp).exists()
+
 android {
     namespace 'com.curseforge.mobile'
     compileSdk 35
@@ -23,10 +33,25 @@ android {
         buildConfigField 'String', 'VERCEL_BASE_URL', "\"${baseUrlProperty}\""
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(releaseStoreFileProp)
+                storePassword releaseStorePasswordProp
+                keyAlias releaseKeyAliasProp
+                keyPassword releaseKeyPasswordProp
+                enableV1Signing true
+                enableV2Signing true
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // Если release-keystore не задан, используем debug-подпись, чтобы APK был устанавливаемым.
+            signingConfig hasReleaseSigning ? signingConfigs.release : signingConfigs.debug
         }
     }
 

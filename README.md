@@ -78,15 +78,16 @@ Workflow при пуше в `main` (или вручную через `workflow_d
 - `release_name` — название релиза
 - `release_notes` — текст исправлений (если пусто, включается авто-генерация GitHub notes)
 
-### Опционально для подписанных релизов
+### Подпись релиза
 
-Если захотите подписывать релизы в CI, добавьте секреты:
-- `ANDROID_KEYSTORE`
+Workflow умеет подписывать `release` через keystore из GitHub Secrets.
+Добавьте секреты:
+- `ANDROID_KEYSTORE` — base64 содержимое `.jks/.keystore`
 - `KEYSTORE_PASSWORD`
 - `KEY_ALIAS`
 - `KEY_PASSWORD`
 
-(В текущем примере workflow собирает release APK без кастомной подписи.)
+Если секреты не заданы, `release` собирается с debug-подписью (APK устанавливается, но это не production-подпись).
 
 ## Отладка и смена backend URL
 
