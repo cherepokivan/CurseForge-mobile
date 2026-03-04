@@ -1,0 +1,20 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Orange hexagon close to provided CurseForge mark -->
+    <path
+        android:fillColor="#F16436"
+        android:pathData="M54,4 L100,30.5 L100,77.5 L54,104 L8,77.5 L8,30.5 Z" />
+
+    <!-- White stylized anvil mark -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M24,41 L66,41 L66,46 L86,46 C84,51 78,55 70,57 C64,58.5 60,63 60,68 C60,72.5 62,76.5 66,80 L44,80 C47,77 50,73.5 50,69 C50,62 44,57 34,56 L24,56 L24,48 L28,48 Z" />
+
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M40,80 L62,80 L64,88 L40,88 L48,80 Z" />
+</vector>
