@@ -77,6 +77,7 @@ Workflow при пуше в `main` (или вручную через `workflow_d
 - `release_tag` — тег релиза (например `v1.0.1`)
 - `release_name` — название релиза
 - `release_notes` — текст исправлений (если пусто, включается авто-генерация GitHub notes)
+- `auto_generate_keystore` — если `true` и secrets не заданы, Actions создаст временный keystore автоматически
 
 ### Подпись релиза
 
@@ -86,6 +87,66 @@ Workflow умеет подписывать `release` через keystore из Gi
 - `KEYSTORE_PASSWORD`
 - `KEY_ALIAS`
 - `KEY_PASSWORD`
+
+Также можно включить авто-генерацию временного keystore в `workflow_dispatch`:
+- установите `auto_generate_keystore=true`;
+- если `ANDROID_KEYSTORE` не задан, workflow создаст одноразовый ключ и подпишет APK им.
+
+⚠️ Такой ключ **временный** и подходит только для тестовых сборок.
+Для Google Play и обновлений одного и того же приложения используйте постоянный keystore из secrets.
+
+> Важно: файл `release-keystore.jks` нужно сначала **создать** (вручную ничего внутрь писать не нужно).
+
+Если `keytool` не найден (`"keytool" не является ... командой`):
+- установите **JDK 17+** (не JRE);
+- откройте новый терминал после установки;
+- проверьте: `keytool -help`.
+
+Создание keystore с нуля:
+
+```bash
+# Windows cmd (одна строка)
+keytool -genkeypair -v -keystore release-keystore.jks -alias release -keyalg RSA -keysize 2048 -validity 10000
+
+# Windows PowerShell (переносы через backtick `)
+keytool -genkeypair -v `
+  -keystore release-keystore.jks `
+  -alias release `
+  -keyalg RSA `
+  -keysize 2048 `
+  -validity 10000
+
+# Linux/macOS (переносы через \)
+keytool -genkeypair -v \
+  -keystore release-keystore.jks \
+  -alias release \
+  -keyalg RSA \
+  -keysize 2048 \
+  -validity 10000
+```
+
+После выполнения команды появится файл `release-keystore.jks` в текущей папке.
+Если команда `certutil -encode release-keystore.jks release-keystore.b64` ругается `ERROR_FILE_NOT_FOUND`,
+значит вы запускаете её не из той директории, где лежит keystore (или файл еще не создан).
+
+Как получить `ANDROID_KEYSTORE` локально:
+
+```bash
+# Linux (GNU coreutils)
+base64 -w 0 release-keystore.jks
+
+# macOS
+base64 release-keystore.jks | tr -d '\n'
+
+# Windows 10/11 (PowerShell)
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("release-keystore.jks"))
+
+# Windows 10/11 (cmd, через certutil)
+# release-keystore.b64 создается этой командой (это обычный текстовый файл с base64)
+certutil -encode release-keystore.jks release-keystore.b64
+# в GitHub Secret ANDROID_KEYSTORE нужно вставить содержимое между
+# -----BEGIN CERTIFICATE----- и -----END CERTIFICATE----- одной строкой (без переносов)
+```
 
 Если секреты не заданы, `release` собирается с debug-подписью (APK устанавливается, но это не production-подпись).
 

@@ -17,6 +17,11 @@ on:
         description: "Текст исправлений (release notes). Если пусто — автогенерация GitHub"
         required: false
         type: string
+      auto_generate_keystore:
+        description: "Автосгенерировать временный keystore, если secrets не заданы (не для Google Play обновлений)"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -50,6 +55,29 @@ jobs:
           echo "RELEASE_STORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> "$GITHUB_ENV"
           echo "RELEASE_KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> "$GITHUB_ENV"
           echo "RELEASE_KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> "$GITHUB_ENV"
+
+      - name: Generate ephemeral release keystore (manual fallback)
+        if: ${{ secrets.ANDROID_KEYSTORE == '' && github.event_name == 'workflow_dispatch' && github.event.inputs.auto_generate_keystore == 'true' }}
+        shell: bash
+        run: |
+          STORE_PASS="$(openssl rand -hex 16)"
+          KEY_PASS="$(openssl rand -hex 16)"
+          ALIAS="release"
+
+          keytool -genkeypair -v \
+            -keystore "$GITHUB_WORKSPACE/ci-ephemeral-release.keystore" \
+            -storepass "$STORE_PASS" \
+            -keypass "$KEY_PASS" \
+            -alias "$ALIAS" \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 3650 \
+            -dname "CN=CI Ephemeral, OU=Automation, O=CurseForge-mobile, L=NA, ST=NA, C=US"
+
+          echo "RELEASE_STORE_FILE=$GITHUB_WORKSPACE/ci-ephemeral-release.keystore" >> "$GITHUB_ENV"
+          echo "RELEASE_STORE_PASSWORD=$STORE_PASS" >> "$GITHUB_ENV"
+          echo "RELEASE_KEY_ALIAS=$ALIAS" >> "$GITHUB_ENV"
+          echo "RELEASE_KEY_PASSWORD=$KEY_PASS" >> "$GITHUB_ENV"
 
       - name: Run unit tests
         run: ./gradlew -PbaseUrl="https://express-js-on-vercel-for-curseforge.vercel.app/" test
