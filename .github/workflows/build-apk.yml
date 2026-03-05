@@ -3,22 +3,26 @@ name: Build Release APK
 on:
   push:
     branches: ["main"]
+
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Тег релиза (например v1.0.1). По умолчанию: apk-<run_number>"
+        description: "Тег релиза (например v1.0.1). По умолчанию apk-<run_number>"
         required: false
         type: string
+
       release_name:
         description: "Название релиза"
         required: false
         type: string
+
       release_notes:
-        description: "Текст исправлений (release notes). Если пусто — автогенерация GitHub"
+        description: "Release notes"
         required: false
         type: string
+
       auto_generate_keystore:
-        description: "Автосгенерировать временный keystore, если secrets не заданы (не для Google Play обновлений)"
+        description: "Автогенерация keystore если secrets не заданы"
         required: false
         default: false
         type: boolean
@@ -29,11 +33,12 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -43,21 +48,35 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Grant execute permission
+      - name: Grant gradlew permission
         run: chmod +x gradlew
 
+      # -----------------------------
+      # Keystore from GitHub Secrets
+      # -----------------------------
       - name: Prepare release keystore (optional)
-        if: ${{ secrets.ANDROID_KEYSTORE != '' }}
+        if: env.ANDROID_KEYSTORE != ''
+        env:
+          ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         shell: bash
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > "$GITHUB_WORKSPACE/ci-release.keystore"
-          echo "RELEASE_STORE_FILE=$GITHUB_WORKSPACE/ci-release.keystore" >> "$GITHUB_ENV"
-          echo "RELEASE_STORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> "$GITHUB_ENV"
-          echo "RELEASE_KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> "$GITHUB_ENV"
-          echo "RELEASE_KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> "$GITHUB_ENV"
+          echo "$ANDROID_KEYSTORE" | base64 --decode > "$GITHUB_WORKSPACE/ci-release.keystore"
 
-      - name: Generate ephemeral release keystore (manual fallback)
-        if: ${{ secrets.ANDROID_KEYSTORE == '' && github.event_name == 'workflow_dispatch' && github.event.inputs.auto_generate_keystore == 'true' }}
+          echo "RELEASE_STORE_FILE=$GITHUB_WORKSPACE/ci-release.keystore" >> $GITHUB_ENV
+          echo "RELEASE_STORE_PASSWORD=$KEYSTORE_PASSWORD" >> $GITHUB_ENV
+          echo "RELEASE_KEY_ALIAS=$KEY_ALIAS" >> $GITHUB_ENV
+          echo "RELEASE_KEY_PASSWORD=$KEY_PASSWORD" >> $GITHUB_ENV
+
+      # -----------------------------
+      # Ephemeral keystore fallback
+      # -----------------------------
+      - name: Generate ephemeral keystore
+        if: env.ANDROID_KEYSTORE == '' && github.event_name == 'workflow_dispatch' && github.event.inputs.auto_generate_keystore == 'true'
+        env:
+          ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
         shell: bash
         run: |
           STORE_PASS="$(openssl rand -hex 16)"
@@ -65,37 +84,52 @@ jobs:
           ALIAS="release"
 
           keytool -genkeypair -v \
-            -keystore "$GITHUB_WORKSPACE/ci-ephemeral-release.keystore" \
+            -keystore "$GITHUB_WORKSPACE/ci-ephemeral.keystore" \
             -storepass "$STORE_PASS" \
             -keypass "$KEY_PASS" \
             -alias "$ALIAS" \
             -keyalg RSA \
             -keysize 2048 \
             -validity 3650 \
-            -dname "CN=CI Ephemeral, OU=Automation, O=CurseForge-mobile, L=NA, ST=NA, C=US"
+            -dname "CN=CI, OU=Automation, O=App, L=NA, ST=NA, C=US"
 
-          echo "RELEASE_STORE_FILE=$GITHUB_WORKSPACE/ci-ephemeral-release.keystore" >> "$GITHUB_ENV"
-          echo "RELEASE_STORE_PASSWORD=$STORE_PASS" >> "$GITHUB_ENV"
-          echo "RELEASE_KEY_ALIAS=$ALIAS" >> "$GITHUB_ENV"
-          echo "RELEASE_KEY_PASSWORD=$KEY_PASS" >> "$GITHUB_ENV"
+          echo "RELEASE_STORE_FILE=$GITHUB_WORKSPACE/ci-ephemeral.keystore" >> $GITHUB_ENV
+          echo "RELEASE_STORE_PASSWORD=$STORE_PASS" >> $GITHUB_ENV
+          echo "RELEASE_KEY_ALIAS=$ALIAS" >> $GITHUB_ENV
+          echo "RELEASE_KEY_PASSWORD=$KEY_PASS" >> $GITHUB_ENV
 
+      # -----------------------------
+      # Tests
+      # -----------------------------
       - name: Run unit tests
         run: ./gradlew -PbaseUrl="https://express-js-on-vercel-for-curseforge.vercel.app/" test
 
-      - name: Build release APK
+      # -----------------------------
+      # Build APK
+      # -----------------------------
+      - name: Build Release APK
         run: ./gradlew -PbaseUrl="https://express-js-on-vercel-for-curseforge.vercel.app/" assembleRelease
 
+      # -----------------------------
+      # Collect APK
+      # -----------------------------
       - name: Collect APK
         run: |
           mkdir -p release
           cp app/build/outputs/apk/release/*.apk release/
 
-      - name: Upload workflow artifact
+      # -----------------------------
+      # Upload artifact
+      # -----------------------------
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: release-apk
           path: release/*.apk
 
+      # -----------------------------
+      # Release metadata
+      # -----------------------------
       - name: Resolve release metadata
         id: relmeta
         shell: bash
@@ -104,8 +138,13 @@ jobs:
           NAME="${{ github.event.inputs.release_name }}"
           NOTES="${{ github.event.inputs.release_notes }}"
 
-          if [ -z "$TAG" ]; then TAG="apk-${{ github.run_number }}"; fi
-          if [ -z "$NAME" ]; then NAME="APK Build #${{ github.run_number }}"; fi
+          if [ -z "$TAG" ]; then
+            TAG="apk-${{ github.run_number }}"
+          fi
+
+          if [ -z "$NAME" ]; then
+            NAME="APK Build #${{ github.run_number }}"
+          fi
 
           {
             echo "tag=$TAG"
@@ -115,8 +154,11 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+      # -----------------------------
+      # Create release with notes
+      # -----------------------------
       - name: Create GitHub Release (manual notes)
-        if: ${{ steps.relmeta.outputs.notes != '' }}
+        if: steps.relmeta.outputs.notes != ''
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.relmeta.outputs.tag }}
@@ -126,7 +168,7 @@ jobs:
           generate_release_notes: false
 
       - name: Create GitHub Release (auto notes)
-        if: ${{ steps.relmeta.outputs.notes == '' }}
+        if: steps.relmeta.outputs.notes == ''
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.relmeta.outputs.tag }}
