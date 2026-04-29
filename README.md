@@ -9,17 +9,18 @@ Android-приложение (Kotlin + Jetpack Compose), которое полу
 - Kotlin + Jetpack Compose UI в тёмной палитре CurseForge (графит + оранжевый акцент)
 - MVVM: Repository -> ViewModel -> UI
 - Retrofit + OkHttp + Kotlinx Serialization
+- Coil для загрузки изображений
+- Автоматическая загрузка Bedrock модов при запуске
 - Поиск + постраничная загрузка
-- Фильтр по версии Bedrock (поддержка точных форматов вроде `1.20.132`, `26.0.0.2`, `26.3.0`)
+- Динамическая загрузка актуальных версий Bedrock с сервера
+- Фильтр по версии Bedrock
+- Улучшенные карточки модов с превью, версией игры и количеством загрузок
+- Детальная страница мода с полным описанием, скриншотами и картинкой
 - Загрузка через `DownloadManager` в `Downloads`
 - `BroadcastReceiver` на завершение загрузки и авто-открытие файла (`.mcpack` / `.mcaddon`) через `FileProvider`
 - Обработка сетевых ошибок и отображение текста ошибки
 - Мини-кэш в памяти по страницам
 - Локальные избранные (Room)
-- Экран настроек:
-  - override BASE URL (для dev/debug)
-  - toggle авто-открытия после загрузки
-- Логи в буфере + кнопка `Send logs (preview)`
 - Unit test для ViewModel
 
 ## API контракты бэкенда
@@ -27,8 +28,19 @@ Android-приложение (Kotlin + Jetpack Compose), которое полу
 Приложение ожидает:
 
 1. `GET {BASE_URL}/api/search?q={query}&page={n}&version={bedrockVersion}` (version опционален)
+   - Возвращает список модов с полями: `id`, `name`, `summary`, `author`, `latestFileId`, `latestFileName`, `downloadUrl` (опционально), `thumbnailUrl` (опционально), `downloadCount`, `gameVersion` (опционально)
+
 2. `GET {BASE_URL}/api/file/{fileId}`
+   - Возвращает информацию о файле
+
 3. `GET {BASE_URL}/api/download?fileId={id}`
+   - Возвращает файл для скачивания
+
+4. `GET {BASE_URL}/api/versions`
+   - Возвращает список актуальных версий Bedrock в формате `{"versions": ["1.21.0", "1.20.80", ...]}`
+
+5. `GET {BASE_URL}/api/addon/{addonId}`
+   - Возвращает детальную информацию о моде: `id`, `name`, `summary`, `description`, `author`, `thumbnailUrl`, `screenshots` (массив URL), `downloadCount`, `gameVersion`, `latestFileId`, `latestFileName`, `downloadUrl`
 
 ## Локальный запуск
 
@@ -153,8 +165,8 @@ certutil -encode release-keystore.jks release-keystore.b64
 ## Отладка и смена backend URL
 
 - Build-time URL задается через `-PbaseUrl=...` (по умолчанию уже выставлен публичный URL Vercel).
-- В приложении на экране **Настройки** можно временно задать override URL для debug-сценариев.
-- Для диагностики нажмите `Send logs (preview)` — появятся последние строки логов.
+- Приложение автоматически загружает Bedrock моды при запуске.
+- Актуальные версии Bedrock загружаются с сервера через API endpoint `/api/versions`.
 
 ## Безопасность
 
